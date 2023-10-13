@@ -8,23 +8,36 @@ struct Circle {
     drag_offset: (f32, f32),
 }
 
-struct Rect {
+struct Wall {
     x: f32,
     y: f32,
     width: f32,
     height: f32,
 }
 
-#[macroquad::main("Circle with Boundaries", window_conf)]
+const SCREEN_WIDTH: f32 = 640.0;
+const SCREEN_HEIGHT: f32 = 480.0;
+const BACKGROUND_COLOR: Color = RED;
+const WALL_COLOR: Color = BLUE;
+
+#[macroquad::main("Circle with Walls", window_conf)]
 async fn main() {
-    let boundaries = vec![
-        Rect {
+    let mut circle = Circle {
+        x: SCREEN_WIDTH / 2.0,
+        y: SCREEN_HEIGHT / 2.0,
+        radius: 50.0,
+        is_dragging: false,
+        drag_offset: (0.0, 0.0),
+    };
+
+    let walls = vec![
+        Wall {
             x: 100.0,
             y: 100.0,
             width: 200.0,
             height: 20.0,
         },
-        Rect {
+        Wall {
             x: 300.0,
             y: 300.0,
             width: 20.0,
@@ -32,75 +45,74 @@ async fn main() {
         },
     ];
 
-    let mut circle = Circle {
-        x: screen_width() / 2.0,
-        y: screen_height() / 2.0,
-        radius: 50.0,
-        is_dragging: false,
-        drag_offset: (0.0, 0.0),
-    };
-
-    let mut was_mouse_down = false;
-
     loop {
-        clear_background(RED);
+        clear_background(BACKGROUND_COLOR);
 
-        let mouse_down = is_mouse_button_down(MouseButton::Left);
-
-        if mouse_down && !was_mouse_down {
-            
-            let mouse_x = mouse_position().0;
-            let mouse_y = mouse_position().1;
-            let distance = (mouse_x - circle.x).powi(2) + (mouse_y - circle.y).powi(2);
-            let radius_squared = circle.radius.powi(2);
-
-            if distance <= radius_squared {
-                circle.is_dragging = true;
-                circle.drag_offset = (circle.x - mouse_x, circle.y - mouse_y);
-            }
+        for wall in &walls {
+            draw_rectangle(wall.x, wall.y, wall.width, wall.height, WALL_COLOR);
         }
 
-        if !mouse_down {
+        let mouse_x = mouse_position().0;
+        let mouse_y = mouse_position().1;
+
+        if is_mouse_button_down(MouseButton::Left) {
+            if !circle.is_dragging {
+                if is_point_in_circle(mouse_x, mouse_y, &circle) {
+                    circle.is_dragging = true;
+                    circle.drag_offset = (circle.x - mouse_x, circle.y - mouse_y);
+                }
+            }
+        } else {
             circle.is_dragging = false;
         }
 
         if circle.is_dragging {
-            
-            circle.x = mouse_position().0 + circle.drag_offset.0;
-            circle.y = mouse_position().1 + circle.drag_offset.1;
-        }
+            let new_x = mouse_x + circle.drag_offset.0;
+            let new_y = mouse_y + circle.drag_offset.1;
 
-        
-        for boundary in &boundaries {
-            if circle_in_walls(&circle, boundary) {
-                
-                circle.x = circle.x.clamp(
-                    boundary.x + circle.radius,
-                    boundary.x + boundary.width - circle.radius,
-                );
-                circle.y = circle.y.clamp(
-                    boundary.y + circle.radius,
-                    boundary.y + boundary.height - circle.radius,
-                );
+            let mut is_blocked = false;
+
+            for wall in &walls {
+                if is_circle_rect_collision(&circle, wall) {
+                    is_blocked = true;
+                    break;
+                }
+            }
+
+            if !is_blocked {
+                circle.x = new_x;
+                circle.y = new_y;
             }
         }
 
-        
-        for boundary in &boundaries {
-            draw_rectangle(boundary.x, boundary.y, boundary.width, boundary.height, GREEN);
-        }
-
         draw_circle(circle.x, circle.y, circle.radius, WHITE);
-
-        was_mouse_down = mouse_down;
 
         next_frame().await;
     }
 }
 
-fn circle_in_walls(circle: &Circle, wall: &Rect) -> bool {
-    circle.x - circle.radius < wall.x + wall.width
-        && circle.x + circle.radius > wall.x
-        && circle.y - circle.radius < wall.y + wall.height
-        && circle.y + circle.radius > wall.y
+fn is_point_in_circle(px: f32, py: f32, circle: &Circle) -> bool {
+    let dx = px - circle.x;
+    let dy = py - circle.y;
+    dx * dx + dy * dy <= circle.radius * circle.radius
+}
+
+fn is_circle_rect_collision(circle: &Circle, rect: &Wall) -> bool {
+    let closest_x = clamp(circle.x, rect.x, rect.x + rect.width);
+    let closest_y = clamp(circle.y, rect.y, rect.y + rect.height);
+
+    let distance_x = circle.x - closest_x;
+    let distance_y = circle.y - closest_y;
+
+    (distance_x * distance_x + distance_y * distance_y) <= (circle.radius * circle.radius)
+}
+
+fn clamp(value: f32, min: f32, max: f32) -> f32 {
+    if value < min {
+        min
+    } else if value > max {
+        max
+    } else {
+        value
+    }
 }
