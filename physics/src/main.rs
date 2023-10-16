@@ -1,4 +1,4 @@
-use maacroquad::prelude::*;
+use macroquad::prelude::*;
 
 struct Circle {
     x: f32,
