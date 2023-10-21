@@ -70,19 +70,19 @@ async fn main() {
             let new_x = mouse_x + circle.drag_offset.0;
             let new_y = mouse_y + circle.drag_offset.1;
 
-            let mut is_blocked = false;
-
+            
             for wall in &walls {
                 if is_circle_rect_collision(&circle, wall) {
-                    is_blocked = true;
-                    break;
+                    
+                    let response = circle_wall_collision_response(&circle, wall);
+                    circle.x += response.0;
+                    circle.y += response.1;
                 }
             }
 
-            if !is_blocked {
-                circle.x = new_x;
-                circle.y = new_y;
-            }
+            
+            circle.x = new_x.clamp(circle.radius, SCREEN_WIDTH - circle.radius);
+            circle.y = new_y.clamp(circle.radius, SCREEN_HEIGHT - circle.radius);
         }
 
         draw_circle(circle.x, circle.y, circle.radius, WHITE);
@@ -98,8 +98,8 @@ fn is_point_in_circle(px: f32, py: f32, circle: &Circle) -> bool {
 }
 
 fn is_circle_rect_collision(circle: &Circle, rect: &Wall) -> bool {
-    let closest_x = clamp(circle.x, rect.x, rect.x + rect.width);
-    let closest_y = clamp(circle.y, rect.y, rect.y + rect.height);
+    let closest_x = circle.x.clamp(rect.x, rect.x + rect.width);
+    let closest_y = circle.y.clamp(rect.y, rect.y + rect.height);
 
     let distance_x = circle.x - closest_x;
     let distance_y = circle.y - closest_y;
@@ -107,12 +107,19 @@ fn is_circle_rect_collision(circle: &Circle, rect: &Wall) -> bool {
     (distance_x * distance_x + distance_y * distance_y) <= (circle.radius * circle.radius)
 }
 
-fn clamp(value: f32, min: f32, max: f32) -> f32 {
-    if value < min {
-        min
-    } else if value > max {
-        max
+fn circle_wall_collision_response(circle: &Circle, wall: &Wall) -> (f32, f32) {
+    let dx = circle.x - wall.x.max(circle.x.min(wall.x + wall.width));
+    let dy = circle.y - wall.y.max(circle.y.min(wall.y + wall.height));
+    let distance = dx * dx + dy * dy;
+
+    if distance < circle.radius * circle.radius {
+        
+        let magnitude = distance.sqrt();
+        let overlap = circle.radius - magnitude;
+        let response_x = dx * (overlap / magnitude);
+        let response_y = dy * (overlap / magnitude);
+        (response_x, response_y)
     } else {
-        value
+        (0.0, 0.0)
     }
 }
